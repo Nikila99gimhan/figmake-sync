@@ -151,6 +151,15 @@ export class UiChangedError extends FigmaAutomationError {
   override readonly code = "UI_CHANGED";
 }
 
+/** The Make file still shows the "What do you want to make?" start screen: it has no code (and no Files view) yet. */
+export class EmptyProjectError extends FigmaAutomationError {
+  override readonly code = "PROJECT_EMPTY";
+
+  constructor() {
+    super("This Figma Make file has no code yet. Make something in it in Figma first, then try again.");
+  }
+}
+
 export class FileNotFoundInTreeError extends FigmaAutomationError {
   override readonly code = "FILE_NOT_FOUND";
 
@@ -235,6 +244,7 @@ function isNonRetryable(error: unknown): boolean {
   return (
     error instanceof AuthRequiredError ||
     error instanceof ProjectUnavailableError ||
+    error instanceof EmptyProjectError ||
     error instanceof AutomationAbortedError ||
     error instanceof WrongFileError ||
     error instanceof FileChangedInFigmaError ||
@@ -2012,7 +2022,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
         }
 
         // All candidates race; the workspace has up to 20s to appear.
-        const codeModeButton = await this.tryFindVisible("codeModeButton", this.codeModeWaitMs);
+        const codeModeButton = await this.findCodeModeButton();
 
         if (!codeModeButton) {
           const lateState = await this.classifyPage();
@@ -2045,6 +2055,39 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
         shouldRetry: (error) => !isNonRetryable(error),
       },
     );
+  }
+
+  /**
+   * Waits for the Code/Files toggle, but stops early with EmptyProjectError when Figma Make shows its start screen
+   * instead: a file without code has no toggle, so that is not a UI change and must never trigger a heal.
+   */
+  private async findCodeModeButton(): Promise<Locator | null> {
+    this.throwIfAborted();
+
+    const page = this.handle.page;
+    const either = [...this.sel("codeModeButton"), ...this.sel("emptyStateRoot")]
+      .map((selector) => page.locator(selector))
+      .reduce((all, next) => all.or(next));
+    const appeared = await this.raceAbort(
+      either.first().waitFor({ state: "visible", timeout: this.codeModeWaitMs }).then(
+        () => "yes" as const,
+        (error: unknown) => (error instanceof Error && error.name === "TimeoutError" ? ("no" as const) : ("unknown" as const)),
+      ),
+    );
+
+    if (appeared === "no") {
+      return null;
+    }
+
+    if (appeared === "unknown") {
+      return this.tryFindVisible("codeModeButton", this.codeModeWaitMs);
+    }
+
+    if (!(await this.isAnyVisibleNow("codeModeButton")) && (await this.isAnyVisibleNow("emptyStateRoot"))) {
+      throw new EmptyProjectError();
+    }
+
+    return this.tryFindVisible("codeModeButton", this.codeModeWaitMs);
   }
 
   /**

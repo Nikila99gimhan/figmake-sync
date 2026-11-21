@@ -6,7 +6,7 @@ import fs from "fs-extra";
 import { chromium, type Browser, type Page } from "playwright";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PlaywrightFigmaMakeProjectSession, type AdapterContext } from "../src/figma/adapter.js";
+import { EmptyProjectError, PlaywrightFigmaMakeProjectSession, type AdapterContext } from "../src/figma/adapter.js";
 import { parseLocalSelectors } from "../src/figma/selectors.js";
 import { gateSelector } from "../src/heal/gate.js";
 import { HealSession } from "../src/heal/heal.js";
@@ -146,6 +146,39 @@ describe("new Figma Make UI (Browser / Files tabs)", { timeout: 40_000 }, () => 
     });
     await s.submitPrompt("make the header blue");
     expect(await page.locator('[data-testid="code-chat-chat-box"]').innerText()).toBe("");
+  });
+});
+
+// A Make file with no code yet (verified live): the workspace shell + "What do you want to make?" composer, no Files tab.
+const EMPTY_STATE = `
+<div data-testid="figmake-full-view">
+  <h1>What do you want to make?</h1>
+  <div data-testid="empty-state-chat-input" role="textbox" contenteditable="true" style="width:200px;height:30px"></div>
+  <button data-testid="empty-state-chat-send-button" aria-label="Send" type="button">^</button>
+</div>`;
+
+describe("empty Make file (start screen, no code yet)", { timeout: 40_000 }, () => {
+  it("fails fast with EmptyProjectError instead of UiChangedError, and never asks the healer", async () => {
+    await page.setContent(EMPTY_STATE);
+    const healer = vi.fn<Healer>(async () => null);
+    const s = makeSession(ctx(healer));
+    (s as unknown as { codeModeWaitMs: number }).codeModeWaitMs = 10_000;
+    const t0 = Date.now();
+    await expect(priv(s).ensureCodeSurfaceReady()).rejects.toBeInstanceOf(EmptyProjectError);
+    expect(Date.now() - t0).toBeLessThan(5_000);
+    expect(healer).not.toHaveBeenCalled();
+  });
+
+  it("a real Files tab still wins when both are on the page", async () => {
+    await page.setContent(NEW_UI);
+    await page.evaluate(() => {
+      const d = document.createElement("div");
+      d.setAttribute("data-testid", "empty-state-chat-input");
+      d.textContent = "x";
+      document.body.prepend(d);
+    });
+    await priv(makeSession()).ensureCodeSurfaceReady();
+    expect(await page.locator('[data-testid="code-editor"]').isVisible()).toBe(true);
   });
 });
 

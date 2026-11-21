@@ -13,6 +13,16 @@
         "[data-testid=\"header-nav-toolbar\"]"
       ]
     },
+    "emptyStateRoot": {
+      "goal": "Figma Make's 'What do you want to make?' start screen of a file that has no code yet (no Files / Code view exists).",
+      "kind": "container",
+      "healable": false,
+      "selectors": [
+        "[data-testid=\"empty-state-chat-input\"]",
+        "[data-testid=\"empty-state-chat-send-button\"]",
+        "[data-testid=\"figmake-empty-state-chat-more-actions-button\"]"
+      ]
+    },
     "codeModeButton": {
       "goal": "Find the control that switches Figma Make from the Browser (preview) view to the Files / Code view (the file explorer + code editor).",
       "kind": "click",
