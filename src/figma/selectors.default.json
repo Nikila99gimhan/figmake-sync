@@ -69,6 +69,16 @@
         ".monaco-editor"
       ]
     },
+    "filesWorkspaceRoot": {
+      "goal": "The Files view itself (file explorer + header). Proves code mode even when the selected file renders as a preview (e.g. AGENTS.md) instead of a code editor.",
+      "kind": "container",
+      "healable": false,
+      "selectors": [
+        "[data-testid=\"files-workspace-header\"]",
+        "[data-testid=\"virtualized-file-tree-container\"]",
+        "[data-testid=\"files-header-actions-menu-button\"]"
+      ]
+    },
     "fileTreeRoot": {
       "goal": "The file explorer tree container.",
       "kind": "container",

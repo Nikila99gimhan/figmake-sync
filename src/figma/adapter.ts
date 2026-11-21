@@ -1969,8 +1969,8 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
       return null;
     }
 
-    // Never classify a healthy workspace: code content could match error phrases.
-    if (await this.isAnyVisibleNow("codeEditorRoot")) {
+    // Never classify a healthy workspace: code or a previewed file (AGENTS.md) could match error phrases.
+    if (await this.isCodeSurfaceVisibleNow()) {
       return null;
     }
 
@@ -1994,7 +1994,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
     for (let again = 0; again < 4 && state?.kind === "auth" && state.detail === "login form detected"; again++) {
       await page.waitForTimeout(2_500);
       if (page.isClosed()) return null;
-      if (await this.isAnyVisibleNow("codeEditorRoot")) return null;
+      if (await this.isCodeSurfaceVisibleNow()) return null;
       state = await read();
     }
 
@@ -2011,7 +2011,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
 
     await withRetry(
       async () => {
-        if (await this.tryFindVisible("codeEditorRoot", 1_500)) {
+        if (await this.waitForCodeSurface(1_500)) {
           return;
         }
 
@@ -2048,13 +2048,40 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
         }
 
         await this.switchToCodeMode(codeModeButton);
-        await this.findVisible("codeEditorRoot", 15_000);
+        await this.expectCodeSurface(15_000);
       },
       {
         attempts: 2,
         shouldRetry: (error) => !isNonRetryable(error),
       },
     );
+  }
+
+  /** Code mode is showing: the code editor, or the Files view when the selected file renders as a preview (AGENTS.md). */
+  private async isCodeSurfaceVisibleNow(): Promise<boolean> {
+    return (await this.isAnyVisibleNow("codeEditorRoot")) || (await this.isAnyVisibleNow("filesWorkspaceRoot"));
+  }
+
+  private async waitForCodeSurface(timeoutMs: number): Promise<boolean> {
+    this.throwIfAborted();
+
+    const page = this.handle.page;
+    const either = [...this.sel("codeEditorRoot"), ...this.sel("filesWorkspaceRoot")]
+      .map((selector) => page.locator(selector))
+      .reduce((all, next) => all.or(next));
+
+    return this.raceAbort(
+      either.first().waitFor({ state: "visible", timeout: timeoutMs }).then(
+        () => true,
+        () => false,
+      ),
+    );
+  }
+
+  private async expectCodeSurface(timeoutMs: number): Promise<void> {
+    if (!(await this.waitForCodeSurface(timeoutMs))) {
+      throw new SelectorNotFoundError("codeEditorRoot", [...this.sel("codeEditorRoot"), ...this.sel("filesWorkspaceRoot")]);
+    }
   }
 
   /**
@@ -2098,7 +2125,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
   private async healCodeModeButton(): Promise<boolean> {
     const healed = await this.healKey("codeModeButton", async (locator) => {
       await this.switchToCodeMode(locator);
-      await this.findVisible("codeEditorRoot", 15_000);
+      await this.expectCodeSurface(15_000);
     });
 
     return healed !== null;

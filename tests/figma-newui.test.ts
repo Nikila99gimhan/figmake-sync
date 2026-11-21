@@ -182,6 +182,23 @@ describe("empty Make file (start screen, no code yet)", { timeout: 40_000 }, () 
   });
 });
 
+describe("Files view opens on a previewed file (AGENTS.md), no code editor yet", { timeout: 40_000 }, () => {
+  const PREVIEW_UI = NEW_UI.replace(
+    /<div data-testid="code-editor"[^>]*>code<\/div>/u,
+    '<div data-testid="markdown-file-preview">figma-make-app: this file doesn\'t exist yet</div>',
+  ).replace('<button data-testid="files-header-actions-menu-button"', '<div data-testid="files-workspace-header">AGENTS.md</div>\n  <button data-testid="files-header-actions-menu-button"');
+
+  it("accepts the Files view as code mode and downloads the code", async () => {
+    expect(PREVIEW_UI).not.toContain('data-testid="code-editor"');
+    await page.setContent(PREVIEW_UI);
+    const s = makeSession();
+    await priv(s).ensureCodeSurfaceReady();
+    expect(await page.locator("#files").isVisible()).toBe(true);
+    const res = await s.downloadLatestCodeZip(path.join(dir, "dl"));
+    expect(res.suggestedFileName).toBe("Project.zip");
+  });
+});
+
 describe("gate shapes", () => {
   beforeEach(() => page.setContent(NEW_UI));
 

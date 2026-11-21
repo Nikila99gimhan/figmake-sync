@@ -18,6 +18,7 @@ export const SELECTOR_KEYS = [
   "emptyStateRoot",
   "codeModeButton",
   "codeEditorRoot",
+  "filesWorkspaceRoot",
   "fileTreeRoot",
   "treeRow",
   "persistenceStatus",
