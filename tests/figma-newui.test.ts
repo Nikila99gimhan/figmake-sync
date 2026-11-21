@@ -89,6 +89,7 @@ function makeSession(heal?: HealContext, overrides: Record<string, string[]> = {
 type Priv = {
   ensureCodeSurfaceReady(): Promise<void>;
   saveEditor(): Promise<void>;
+  readActiveEditorContent(): Promise<string>;
 };
 const priv = (s: PlaywrightFigmaMakeProjectSession): Priv => s as unknown as Priv;
 
@@ -196,6 +197,43 @@ describe("Files view opens on a previewed file (AGENTS.md), no code editor yet",
     expect(await page.locator("#files").isVisible()).toBe(true);
     const res = await s.downloadLatestCodeZip(path.join(dir, "dl"));
     expect(res.suggestedFileName).toBe("Project.zip");
+  });
+
+  // Live: the Files header has a "Markdown preview" checkbox; unchecking it swaps the preview for the code editor.
+  const MD_UI = NEW_UI.replace(
+    /<div data-testid="code-editor"[^>]*>code<\/div>/u,
+    '<div data-testid="markdown-file-preview" id="mdp"># Agents</div><div data-testid="code-editor" id="ed" role="textbox" contenteditable="true" style="width:200px;height:40px" hidden># Agents</div>',
+  ).replace(
+    '<button data-testid="files-header-actions-menu-button"',
+    '<input type="checkbox" id="mdt" data-x="md-src" aria-label="Markdown preview" checked>\n  <button data-testid="files-header-actions-menu-button"',
+  ).replace(
+    "</script>",
+    "document.getElementById('mdt').addEventListener('change', (e) => { $('mdp').hidden = e.target.checked === false; $('ed').hidden = e.target.checked; });\n</script>",
+  );
+
+  it("a renamed Markdown preview toggle is healed; the post-condition is that the code editor appears", async () => {
+    await page.setContent(MD_UI);
+    await page.evaluate(() => {
+      const t = document.getElementById("mdt") as HTMLElement;
+      t.removeAttribute("aria-label");
+      t.setAttribute("title", "Render markdown");
+    });
+    const healer = vi.fn<Healer>(async (req) => (req.key === "markdownPreviewToggle" ? { selectors: ['button[aria-label="Send"]', 'input[data-x="md-src"]'] } : null));
+    const c = ctx(healer);
+    const s = makeSession(c);
+    await priv(s).ensureCodeSurfaceReady();
+    expect(await priv(s).readActiveEditorContent()).toBe("# Agents");
+    expect(await page.locator("#ed").isVisible()).toBe(true);
+    expect(healer.mock.calls.map((call) => call[0].key)).toEqual(["markdownPreviewToggle"]);
+    expect(c.store.get("markdownPreviewToggle")).toEqual(['input[data-x="md-src"]']);
+  });
+
+  it("without the toggle and without a healer it fails naming the toggle, not the editor", async () => {
+    await page.setContent(MD_UI);
+    await page.evaluate(() => document.getElementById("mdt")?.remove());
+    const s = makeSession();
+    await priv(s).ensureCodeSurfaceReady();
+    await expect(priv(s).readActiveEditorContent()).rejects.toMatchObject({ code: "SELECTOR_NOT_FOUND", message: expect.stringContaining("markdownPreviewToggle") });
   });
 });
 

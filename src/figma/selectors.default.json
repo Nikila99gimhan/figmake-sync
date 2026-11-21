@@ -79,6 +79,27 @@
         "[data-testid=\"files-header-actions-menu-button\"]"
       ]
     },
+    "markdownPreview": {
+      "goal": "The rendered preview Figma Make shows instead of the code editor when a Markdown file is opened.",
+      "kind": "container",
+      "healable": false,
+      "selectors": [
+        "[data-testid=\"markdown-file-preview\"]"
+      ]
+    },
+    "markdownPreviewToggle": {
+      "goal": "Find the 'Markdown preview' toggle in the Files header that switches an opened Markdown file from its rendered preview to the code editor.",
+      "kind": "click",
+      "healable": true,
+      "expectTerms": ["markdown", "preview"],
+      "selectors": [
+        "[data-testid=\"markdown-preview-toggle\"]",
+        "input[type=\"checkbox\"][data-tooltip=\"Markdown preview\" i]",
+        "[aria-label=\"Markdown preview\" i]",
+        "internal:role=checkbox[name=/markdown preview/i]",
+        "internal:role=switch[name=/markdown preview/i]"
+      ]
+    },
     "fileTreeRoot": {
       "goal": "The file explorer tree container.",
       "kind": "container",

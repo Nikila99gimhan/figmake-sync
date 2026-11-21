@@ -2071,7 +2071,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
       .reduce((all, next) => all.or(next));
 
     return this.raceAbort(
-      either.first().waitFor({ state: "visible", timeout: timeoutMs }).then(
+      either.filter({ visible: true }).first().waitFor({ state: "visible", timeout: timeoutMs }).then(
         () => true,
         () => false,
       ),
@@ -2082,6 +2082,37 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
     if (!(await this.waitForCodeSurface(timeoutMs))) {
       throw new SelectorNotFoundError("codeEditorRoot", [...this.sel("codeEditorRoot"), ...this.sel("filesWorkspaceRoot")]);
     }
+  }
+
+  /**
+   * The code editor of the open file. Figma Make opens Markdown files (AGENTS.md, README.md) as a rendered preview
+   * with no editor, so that preview is switched off first (healable toggle; post-condition: the editor appears).
+   */
+  private async findEditor(timeoutMs = 6_000): Promise<Locator> {
+    this.throwIfAborted();
+
+    const page = this.handle.page;
+    const either = [...this.sel("codeEditorRoot"), ...this.sel("markdownPreview")]
+      .map((selector) => page.locator(selector))
+      .reduce((all, next) => all.or(next));
+    const shown = await this.raceAbort(
+      either.filter({ visible: true }).first().waitFor({ state: "visible", timeout: timeoutMs }).then(
+        () => true,
+        () => false,
+      ),
+    );
+
+    if (!shown) {
+      throw new SelectorNotFoundError("codeEditorRoot", this.sel("codeEditorRoot"));
+    }
+
+    if ((await this.isAnyVisibleNow("markdownPreview")) && !(await this.isAnyVisibleNow("codeEditorRoot"))) {
+      await this.clickKey("markdownPreviewToggle", 2_000, async () => {
+        await this.findVisible("codeEditorRoot", 4_000);
+      });
+    }
+
+    return this.findVisible("codeEditorRoot", timeoutMs);
   }
 
   /**
@@ -2096,7 +2127,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
       .map((selector) => page.locator(selector))
       .reduce((all, next) => all.or(next));
     const appeared = await this.raceAbort(
-      either.first().waitFor({ state: "visible", timeout: this.codeModeWaitMs }).then(
+      either.filter({ visible: true }).first().waitFor({ state: "visible", timeout: this.codeModeWaitMs }).then(
         () => "yes" as const,
         (error: unknown) => (error instanceof Error && error.name === "TimeoutError" ? ("no" as const) : ("unknown" as const)),
       ),
@@ -2510,7 +2541,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
     }
 
     this.activePath = relativePath;
-    await this.findVisible("codeEditorRoot", 6_000);
+    await this.findEditor(6_000);
 
     return { matchCount: hit.matchCount };
   }
@@ -2600,7 +2631,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
         }
 
         await quickOpenInput.press("Enter");
-        await this.findVisible("codeEditorRoot", 10_000);
+        await this.findEditor(10_000);
         await this.pollUntil(
           async () => (await this.readEditorContentOrNull()) !== before,
           3_000,
@@ -3060,7 +3091,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
     }
 
     if (selected && this.activePath === relativePath) {
-      await this.findVisible("codeEditorRoot", 6_000);
+      await this.findEditor(6_000);
       return;
     }
 
@@ -3092,7 +3123,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
     }
 
     this.activePath = relativePath;
-    await this.findVisible("codeEditorRoot", 6_000);
+    await this.findEditor(6_000);
   }
 
   private async openContextMenuOn(target: Locator): Promise<void> {
@@ -3533,7 +3564,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
   }
 
   private async writeEditorContent(content: string, options: { strict?: boolean; relativePath?: string } = {}): Promise<void> {
-    const editorRoot = await this.findVisible("codeEditorRoot", 6_000);
+    const editorRoot = await this.findEditor(6_000);
     let replaced = false;
 
     for (const target of await this.resolveCodeMirrorTargets(editorRoot)) {
@@ -3676,7 +3707,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
   }
 
   private async readActiveEditorContent(): Promise<string> {
-    const editorRoot = await this.findVisible("codeEditorRoot", 6_000);
+    const editorRoot = await this.findEditor(6_000);
 
     for (const target of await this.resolveCodeMirrorTargets(editorRoot)) {
       const codeMirrorValue = await tryReadCodeMirrorDocument(target).catch(
@@ -3742,7 +3773,7 @@ export class PlaywrightFigmaMakeProjectSession implements FigmaMakeProjectSessio
   }
 
   private async findEditorInput(): Promise<Locator> {
-    const editorRoot = await this.findVisible("codeEditorRoot", 6_000);
+    const editorRoot = await this.findEditor(6_000);
 
     if (await isEditableCodeEditorRoot(editorRoot)) {
       return editorRoot;

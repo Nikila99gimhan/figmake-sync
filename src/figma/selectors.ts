@@ -19,6 +19,8 @@ export const SELECTOR_KEYS = [
   "codeModeButton",
   "codeEditorRoot",
   "filesWorkspaceRoot",
+  "markdownPreview",
+  "markdownPreviewToggle",
   "fileTreeRoot",
   "treeRow",
   "persistenceStatus",
